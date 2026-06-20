@@ -95,16 +95,18 @@ export default function IsansuChat() {
           contents,
         }),
       })
-      const data = await res.json()
+
+      const text = await res.text()
+      let data
+      try { data = JSON.parse(text) } catch { throw new Error(`응답 파싱 실패: ${text.slice(0, 200)}`) }
 
       if (!res.ok) {
-        const errMsg = data?.error?.message || `API 오류 (${res.status})`
-        throw new Error(errMsg)
+        throw new Error(`[${res.status}] ${data?.error?.message || text.slice(0, 200)}`)
       }
 
       const reply =
         data.candidates?.[0]?.content?.parts?.[0]?.text ||
-        '응답을 받지 못했어요. 다시 시도해주세요. 😅'
+        `응답 구조 오류: ${JSON.stringify(data).slice(0, 200)}`
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
     } catch (e) {
       setMessages(prev => [
