@@ -269,7 +269,7 @@ export default function Home() {
 
               <div className="flex flex-wrap gap-5 mb-6">
                 {[
-                  [String(10 + generatedCalcs.length) + '개', '운영 중'],
+                  ['32개', '운영 중'],
                   [String(topRequests.length) + '개', '이번 주 요청'],
                   ['즉시', '자동 생성'],
                 ].map(([value, label]) => (
