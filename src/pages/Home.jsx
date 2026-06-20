@@ -4,7 +4,7 @@ import Layout from '../components/Layout'
 import CalculatorCard from '../components/CalculatorCard'
 import IsansuModal from '../components/IsansuModal'
 import { calculators } from '../data/calculators'
-import { getTopRequests, getGenerated } from '../utils/storage'
+import { getTopRequests } from '../utils/storage'
 
 const CATEGORY_CARDS = [
   {
@@ -81,11 +81,9 @@ export default function Home() {
   const [showModal, setShowModal] = useState(false)
   const [showAll, setShowAll] = useState(false)
   const [topRequests, setTopRequests] = useState([])
-  const [generatedCalcs, setGeneratedCalcs] = useState([])
 
   useEffect(() => {
     setTopRequests(getTopRequests(5))
-    setGeneratedCalcs(getGenerated())
   }, [])
 
   const filtered = query.trim()
@@ -93,8 +91,6 @@ export default function Home() {
         c.name.includes(query) || c.description.includes(query)
       )
     : calculators
-
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
   return (
     <Layout>
@@ -244,36 +240,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* 이산수가 추가한 NEW 계산기 */}
-      {generatedCalcs.length > 0 && (
-        <section className="max-w-6xl mx-auto px-4 pb-2 pt-6">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-xl font-bold text-gray-800">🤖 이산수가 추가한 계산기</h2>
-            <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">NEW</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {generatedCalcs.map(calc => (
-              <Link
-                key={calc.id}
-                to={calc.path}
-                className="calc-card hover:shadow-md hover:border-blue-200 transition-all group relative"
-              >
-                {new Date(calc.createdAt) > sevenDaysAgo && (
-                  <span className="absolute -top-1.5 -right-1.5 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">
-                    NEW
-                  </span>
-                )}
-                <div className="text-3xl mb-2 text-center">{calc.spec.icon}</div>
-                <div className="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors text-center leading-tight">
-                  {calc.name}
-                </div>
-                <div className="text-xs text-slate-400 text-center mt-1">🤖 AI 생성</div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* 이산수 소개 섹션 */}
       <section className="max-w-6xl mx-auto px-4 py-12">
