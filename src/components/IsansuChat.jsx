@@ -96,14 +96,20 @@ export default function IsansuChat() {
         }),
       })
       const data = await res.json()
+
+      if (!res.ok) {
+        const errMsg = data?.error?.message || `API 오류 (${res.status})`
+        throw new Error(errMsg)
+      }
+
       const reply =
         data.candidates?.[0]?.content?.parts?.[0]?.text ||
-        '죄송해요, 잠시 후 다시 시도해주세요. 😅'
+        '응답을 받지 못했어요. 다시 시도해주세요. 😅'
       setMessages(prev => [...prev, { role: 'assistant', content: reply }])
-    } catch {
+    } catch (e) {
       setMessages(prev => [
         ...prev,
-        { role: 'assistant', content: '연결 오류가 발생했어요. 잠시 후 다시 시도해주세요. 😅' },
+        { role: 'assistant', content: `오류: ${e.message}` },
       ])
     } finally {
       setLoading(false)
