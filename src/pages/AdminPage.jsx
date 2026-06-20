@@ -4,6 +4,8 @@ import Layout from '../components/Layout'
 import { getRequests, getGenerated, saveGenerated, updateRequestStatus } from '../utils/storage'
 
 const ADMIN_PASSWORD = 'isansu2026'
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`
 
 const GENERATION_PROMPT = (name, description, category) => `당신은 계산기 JSON 스펙 생성 전문가입니다.
 아래 형식의 JSON만 응답하세요. 마크다운, 설명, 코드블록 없이 순수 JSON만 응답하세요.
@@ -69,7 +71,6 @@ export default function AdminPage() {
   const [authed, setAuthed] = useState(false)
   const [pw, setPw] = useState('')
   const [pwError, setPwError] = useState(false)
-  const [apiKey, setApiKey] = useState(() => sessionStorage.getItem('isansu_api_key') || '')
   const [requests, setRequests] = useState([])
   const [generated, setGenerated] = useState([])
   const [generating, setGenerating] = useState(null)
@@ -89,33 +90,21 @@ export default function AdminPage() {
     else { setPwError(true) }
   }
 
-  function saveApiKey(key) {
-    setApiKey(key)
-    sessionStorage.setItem('isansu_api_key', key)
-  }
-
   async function generate(req) {
-    if (!apiKey.trim()) { alert('Claude API 키를 입력해주세요.'); return }
+    if (!GEMINI_KEY) { alert('VITE_GEMINI_API_KEY 환경변수가 설정되지 않았습니다.'); return }
     setGenerating(req.id)
     setError(p => ({ ...p, [req.id]: null }))
     setPreview(p => ({ ...p, [req.id]: null }))
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch(GEMINI_URL, {
         method: 'POST',
-        headers: {
-          'x-api-key': apiKey.trim(),
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-          'anthropic-dangerous-allow-browser': 'true',
-        },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 2048,
-          messages: [{
-            role: 'user',
-            content: GENERATION_PROMPT(req.name, req.description, req.category),
+          contents: [{
+            parts: [{ text: GENERATION_PROMPT(req.name, req.description, req.category) }]
           }],
+          generationConfig: { temperature: 0.3 },
         }),
       })
 
@@ -125,9 +114,8 @@ export default function AdminPage() {
       }
 
       const data = await res.json()
-      const raw = data.content?.[0]?.text?.trim() || ''
+      const raw = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
 
-      // JSON 추출 (마크다운 코드블록 처리)
       const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim()
       const spec = JSON.parse(cleaned)
       spec.name = req.name
@@ -201,24 +189,20 @@ export default function AdminPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        {/* API 키 */}
-        <div className="calc-card">
-          <h2 className="font-bold text-gray-800 mb-3 flex items-center gap-2">
-            🔑 Claude API 키
-            <span className="text-xs text-gray-400 font-normal">(세션 중에만 유지됩니다)</span>
-          </h2>
-          <div className="flex gap-3">
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => saveApiKey(e.target.value)}
-              className="input-field flex-1"
-              placeholder="sk-ant-..."
-            />
-            <div className={`flex items-center px-3 rounded-lg text-sm font-medium ${apiKey ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50'}`}>
-              {apiKey ? '✓ 입력됨' : '미입력'}
-            </div>
+        {/* Gemini 상태 */}
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${GEMINI_KEY ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          <span className="text-lg">{GEMINI_KEY ? '✅' : '❌'}</span>
+          <div className="flex-1">
+            <p className={`text-sm font-semibold ${GEMINI_KEY ? 'text-green-700' : 'text-red-700'}`}>
+              {GEMINI_KEY ? 'Gemini API 연결됨' : 'Gemini API 키 없음'}
+            </p>
+            <p className="text-xs text-gray-500">
+              {GEMINI_KEY
+                ? `키: ${GEMINI_KEY.slice(0, 6)}${'*'.repeat(10)} · gemini-2.5-flash 모델 사용`
+                : '.env 파일에 VITE_GEMINI_API_KEY를 추가하세요'}
+            </p>
           </div>
+          <span className="text-xs text-gray-400 bg-white px-2 py-1 rounded-full border">Google Gemini</span>
         </div>
 
         {/* 대기 중인 요청 */}
@@ -248,7 +232,7 @@ export default function AdminPage() {
                     </div>
                     <button
                       onClick={() => generate(req)}
-                      disabled={generating === req.id || !apiKey}
+                      disabled={generating === req.id || !GEMINI_KEY}
                       className="shrink-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl
                                  text-sm font-semibold hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
