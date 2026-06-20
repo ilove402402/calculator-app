@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { getRequests, getGenerated, saveGenerated, updateRequestStatus } from '../utils/storage'
 
-const ADMIN_PASSWORD = 'isansu2026'
+const ADMIN_ID = 'admin'
+const ADMIN_PASSWORD = 'admin1234'
 const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`
 
@@ -69,8 +70,9 @@ function CodeBlock({ code }) {
 
 export default function AdminPage() {
   const [authed, setAuthed] = useState(false)
+  const [id, setId] = useState('')
   const [pw, setPw] = useState('')
-  const [pwError, setPwError] = useState(false)
+  const [loginError, setLoginError] = useState(false)
   const [requests, setRequests] = useState([])
   const [generated, setGenerated] = useState([])
   const [generating, setGenerating] = useState(null)
@@ -86,8 +88,8 @@ export default function AdminPage() {
   }, [authed])
 
   function login() {
-    if (pw === ADMIN_PASSWORD) { setAuthed(true); setPwError(false) }
-    else { setPwError(true) }
+    if (id === ADMIN_ID && pw === ADMIN_PASSWORD) { setAuthed(true); setLoginError(false) }
+    else { setLoginError(true) }
   }
 
   async function generate(req) {
@@ -145,17 +147,25 @@ export default function AdminPage() {
           <div className="calc-card text-center">
             <div className="text-5xl mb-4">🤖</div>
             <h1 className="text-xl font-bold text-gray-800 mb-1">이산수 관리자</h1>
-            <p className="text-sm text-gray-400 mb-6">비밀번호를 입력하세요</p>
+            <p className="text-sm text-gray-400 mb-6">관리자 계정으로 로그인하세요</p>
+            <input
+              type="text"
+              value={id}
+              onChange={e => { setId(e.target.value); setLoginError(false) }}
+              onKeyDown={e => e.key === 'Enter' && login()}
+              className={`input-field mb-3 ${loginError ? 'border-red-400' : ''}`}
+              placeholder="아이디"
+              autoFocus
+            />
             <input
               type="password"
               value={pw}
-              onChange={e => setPw(e.target.value)}
+              onChange={e => { setPw(e.target.value); setLoginError(false) }}
               onKeyDown={e => e.key === 'Enter' && login()}
-              className={`input-field mb-3 ${pwError ? 'border-red-400' : ''}`}
+              className={`input-field mb-3 ${loginError ? 'border-red-400' : ''}`}
               placeholder="비밀번호"
-              autoFocus
             />
-            {pwError && <p className="text-red-500 text-sm mb-3">비밀번호가 틀렸습니다</p>}
+            {loginError && <p className="text-red-500 text-sm mb-3">아이디 또는 비밀번호가 틀렸습니다</p>}
             <button onClick={login}
               className="w-full py-3 bg-slate-800 text-white rounded-xl font-semibold hover:bg-slate-700 transition-colors">
               로그인
