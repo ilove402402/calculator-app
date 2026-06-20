@@ -362,6 +362,312 @@ export function calculateYearEndTax(annualSalary, dependents, creditCard, medica
   }
 }
 
+// ─── 10. 주휴수당 ─────────────────────────────────────────────────────────────
+
+export function calculateWeeklyHoliday(hourlyWage, hoursPerDay, daysPerWeek) {
+  const wage = Number(hourlyWage)
+  const h = Number(hoursPerDay)
+  const d = Number(daysPerWeek)
+  if (!wage || !h || !d) return null
+  const weeklyHours = h * d
+  if (weeklyHours < 15) return { eligible: false, weeklyHours }
+  const weeklyHolidayPay = wage * (weeklyHours / 5)
+  const weeklyTotalPay = wage * weeklyHours + weeklyHolidayPay
+  const monthlyPay = weeklyTotalPay * (365 / 7 / 12)
+  return { eligible: true, weeklyHours, weeklyHolidayPay, weeklyTotalPay, monthlyPay }
+}
+
+// ─── 11. 취득세 ───────────────────────────────────────────────────────────────
+
+export function calculateAcquisitionTax(price, ownedCount, isAdjusted, propertyType, areaM2) {
+  const p = Number(price)
+  if (!p) return null
+  const count = Number(ownedCount) // 취득 후 보유 주택 수
+  const area = Number(areaM2) || 0
+
+  let taxRate = 0
+  if (propertyType === 'non-house') {
+    taxRate = 0.04
+  } else if (propertyType === 'land') {
+    taxRate = 0.03
+  } else {
+    // 주택: 취득 후 보유 수 기준
+    if (count <= 1) {
+      if (p <= 600_000_000) taxRate = 0.01
+      else if (p <= 900_000_000) taxRate = ((p - 600_000_000) / 300_000_000) * 0.02 + 0.01
+      else taxRate = 0.03
+    } else if (count === 2) {
+      taxRate = isAdjusted ? 0.08 : (p <= 600_000_000 ? 0.01 : p <= 900_000_000 ? ((p - 600_000_000) / 300_000_000) * 0.02 + 0.01 : 0.03)
+    } else {
+      taxRate = isAdjusted ? 0.12 : 0.08
+    }
+  }
+
+  const baseTax = p * taxRate
+  // 지방교육세 (취득세율 기준, 주택)
+  const eduTaxRate = propertyType === 'house' && taxRate <= 0.01 ? 0.001
+    : taxRate <= 0.03 ? taxRate * 0.2 : taxRate * 0.2
+  const eduTax = p * eduTaxRate
+  // 농어촌특별세 (85㎡ 이하 주택 면제, 취득세율 1% 이하 면제)
+  let ruralTax = 0
+  if (propertyType === 'house' && taxRate > 0.01 && !(area > 0 && area <= 85)) {
+    ruralTax = baseTax * 0.1
+  } else if (propertyType === 'non-house') {
+    ruralTax = baseTax * 0.2
+  }
+
+  return { taxRate, baseTax, eduTax, ruralTax, total: baseTax + eduTax + ruralTax }
+}
+
+// ─── 12. 증여세 ───────────────────────────────────────────────────────────────
+
+export function calculateGiftTax(giftAmount, relationship) {
+  const amount = Number(giftAmount)
+  if (!amount) return null
+
+  // 증여재산공제 (10년 합산)
+  const deductionMap = {
+    spouse: 600_000_000,
+    lineal_minor: 20_000_000,
+    lineal_adult: 50_000_000,
+    other_relative: 10_000_000,
+    non_relative: 0,
+  }
+  const deduction = deductionMap[relationship] || 0
+  const taxableBase = Math.max(0, amount - deduction)
+  if (taxableBase === 0) return { deduction, taxableBase: 0, taxBeforeCredit: 0, reportCredit: 0, finalTax: 0 }
+
+  // 누진세율
+  let tax = 0
+  if (taxableBase <= 100_000_000) tax = taxableBase * 0.10
+  else if (taxableBase <= 500_000_000) tax = 10_000_000 + (taxableBase - 100_000_000) * 0.20
+  else if (taxableBase <= 1_000_000_000) tax = 90_000_000 + (taxableBase - 500_000_000) * 0.30
+  else if (taxableBase <= 3_000_000_000) tax = 240_000_000 + (taxableBase - 1_000_000_000) * 0.40
+  else tax = 1_040_000_000 + (taxableBase - 3_000_000_000) * 0.50
+
+  const reportCredit = tax * 0.03 // 신고세액공제 3%
+  const finalTax = Math.max(0, tax - reportCredit)
+
+  return { deduction, taxableBase, taxBeforeCredit: tax, reportCredit, finalTax }
+}
+
+// ─── 13. 부동산 중개수수료 ────────────────────────────────────────────────────
+
+export function calculateRealEstateFee(transactionType, price, monthlyRent, deposit) {
+  let base = Number(price)
+
+  // 월세의 경우 환산금액 = 보증금 + 월세×100 (단, 5천만원 미만이면 월세×70)
+  if (transactionType === 'monthly') {
+    const dep = Number(deposit) || 0
+    const rent = Number(monthlyRent) || 0
+    const converted = dep + rent * 100
+    base = converted
+  }
+
+  if (!base || base <= 0) return null
+
+  const isSale = transactionType === 'sale'
+  let rate = 0
+  let limit = Infinity
+
+  if (isSale) {
+    if (base < 50_000_000)        { rate = 0.006; limit = 250_000 }
+    else if (base < 200_000_000)  { rate = 0.005; limit = 800_000 }
+    else if (base < 900_000_000)  { rate = 0.004 }
+    else if (base < 1_200_000_000){ rate = 0.005 }
+    else if (base < 1_500_000_000){ rate = 0.006 }
+    else                           { rate = 0.007 }
+  } else {
+    if (base < 50_000_000)        { rate = 0.005; limit = 200_000 }
+    else if (base < 100_000_000)  { rate = 0.004; limit = 300_000 }
+    else if (base < 600_000_000)  { rate = 0.003 }
+    else if (base < 1_200_000_000){ rate = 0.004 }
+    else if (base < 1_500_000_000){ rate = 0.005 }
+    else                           { rate = 0.006 }
+  }
+
+  const raw = base * rate
+  const fee = Math.min(raw, limit)
+  const vat = fee * 0.1
+
+  return { base, rate, fee, vat, total: fee + vat }
+}
+
+// ─── 14. 적금 이자 ────────────────────────────────────────────────────────────
+
+export function calculateSavings(monthlyDeposit, annualRate, termMonths) {
+  const pmt = Number(monthlyDeposit)
+  const r = Number(annualRate) / 100 / 12
+  const n = Number(termMonths)
+  if (!pmt || !n || annualRate === undefined) return null
+
+  const totalPrincipal = pmt * n
+  let totalInterest = 0
+
+  if (r === 0) {
+    totalInterest = 0
+  } else {
+    // 매월 납입, 만기 일시지급
+    // 이자 = Σ (pmt × r × 잔여개월수) for 1~n
+    // = pmt × r × n(n+1)/2
+    totalInterest = pmt * r * (n * (n + 1)) / 2
+  }
+
+  const taxRate = 0.154
+  const taxAmount = totalInterest * taxRate
+  const netInterest = totalInterest - taxAmount
+  const maturityAmount = totalPrincipal + netInterest
+
+  return { totalPrincipal, totalInterest, taxAmount, netInterest, maturityAmount }
+}
+
+// ─── 15. 복리 계산 ────────────────────────────────────────────────────────────
+
+export function calculateCompoundInterest(principal, annualRate, years, additionalMonthly, frequency) {
+  const pv = Number(principal)
+  const rate = Number(annualRate) / 100
+  const n = Number(years)
+  const add = Number(additionalMonthly) || 0
+  if (!pv || !rate || !n) return null
+
+  // frequency: 'year' or 'month'
+  const periodsPerYear = frequency === 'month' ? 12 : 1
+  const rPerPeriod = rate / periodsPerYear
+  const totalPeriods = n * periodsPerYear
+
+  const fvPrincipal = pv * Math.pow(1 + rPerPeriod, totalPeriods)
+  let fvAdditional = 0
+  if (add > 0 && frequency === 'month') {
+    fvAdditional = add * ((Math.pow(1 + rPerPeriod, totalPeriods) - 1) / rPerPeriod)
+  }
+  const totalFV = fvPrincipal + fvAdditional
+  const totalPrincipal = pv + add * (frequency === 'month' ? n * 12 : 0)
+  const totalInterest = totalFV - totalPrincipal
+
+  return { totalFV, totalPrincipal, totalInterest, fvPrincipal }
+}
+
+// ─── 16. 육아휴직급여 (2024년 개정) ───────────────────────────────────────────
+
+export function calculateParentalLeave(monthlyWage, months) {
+  const wage = Number(monthlyWage)
+  const m = Number(months)
+  if (!wage || !m || m < 1 || m > 12) return null
+
+  const schedule = []
+  let total = 0
+  for (let i = 1; i <= m; i++) {
+    let rate, cap
+    if (i <= 3) { rate = 1.0; cap = 2_000_000 }
+    else if (i <= 6) { rate = 0.80; cap = 1_500_000 }
+    else { rate = 0.50; cap = 1_200_000 }
+    const raw = wage * rate
+    const amount = Math.max(700_000, Math.min(raw, cap))
+    schedule.push({ month: i, rate, raw, amount })
+    total += amount
+  }
+
+  return { schedule, total, averageMonthly: total / m }
+}
+
+// ─── 17. 기초연금 추정 ────────────────────────────────────────────────────────
+
+export function calculateBasicPension(monthlyIncome, assets, isCouple) {
+  // 2025년 기준 (2026년 소폭 인상 가정)
+  const MAX_SINGLE = 342_510
+  const MAX_COUPLE_EACH = 274_010
+  const threshold = isCouple ? 3_408_000 : 2_130_000
+
+  const income = Number(monthlyIncome) || 0
+  // 재산 소득환산액 (일반재산): (재산 - 기본공제액) × 환산율 / 12
+  // 기본공제: 지역별 다르나 1억 3,500만원으로 가정 (중소도시)
+  const assetVal = Number(assets) || 0
+  const basicExemption = 135_000_000
+  const incomeFromAsset = Math.max(0, (assetVal - basicExemption) * 0.04 / 12)
+  const recognizedIncome = income + incomeFromAsset
+
+  const maxPension = isCouple ? MAX_COUPLE_EACH : MAX_SINGLE
+  if (recognizedIncome >= threshold) {
+    return { recognizedIncome, eligible: false, monthly: 0, isCouple }
+  }
+  // 소득역전방지: 기초연금액 + 소득인정액 ≤ 선정기준액
+  const raw = maxPension - (recognizedIncome - (threshold - maxPension))
+  const monthly = Math.max(0, Math.min(maxPension, raw))
+
+  return { recognizedIncome, eligible: true, monthly, isCouple, annualTotal: monthly * 12 }
+}
+
+// ─── 18. 국민연금 예상 수령액 ─────────────────────────────────────────────────
+
+export function calculateNationalPension(avgMonthlyIncome, joinMonths) {
+  const B = Number(avgMonthlyIncome) || 0
+  const n = Number(joinMonths) || 0
+  if (!B || !n) return null
+
+  // 2026년 A값 (전체 가입자 3년 평균소득월액)
+  const A = 3_089_062
+  // 소득대체율 2026: 42%
+  const incomeReplaceRate = 0.42
+  // 기본연금액 = 1.2 × (A+B)/2 × (n/240) × 소득대체율/0.5
+  // 단순화: 완전노령연금(20년=240개월) 기준 소득대체율 적용
+  const monthlyPension = 1.2 * (A + B) / 2 * (n / 240) * (incomeReplaceRate / 0.5) * 0.5
+  const fullPension = 1.2 * (A + B) / 2 * (incomeReplaceRate / 0.5) * 0.5
+
+  return {
+    A, B, n,
+    monthlyPension: Math.round(monthlyPension),
+    fullPension: Math.round(fullPension),
+    eligibleAge: 63, // 2026 기준
+    yearlyPension: Math.round(monthlyPension * 12),
+  }
+}
+
+// ─── 19. 전기요금 (한전 2024 주택용 저압) ────────────────────────────────────
+
+export function calculateElectricity(kwh, month) {
+  const usage = Number(kwh)
+  if (!usage || usage <= 0) return null
+  const m = Number(month) || new Date().getMonth() + 1
+
+  // 하계(7~8월), 동계(12~2월), 기타
+  const isSummer = m >= 7 && m <= 8
+  const isWinter = m === 12 || m <= 2
+
+  let basicFee = 0, energyFee = 0
+
+  if (isSummer || isWinter) {
+    // 하계/동계 누진 3단계
+    if (usage <= 300) {
+      basicFee = isSummer ? 910 : 1_600
+    } else if (usage <= 450) {
+      basicFee = isSummer ? 1_600 : 7_300
+    } else {
+      basicFee = 7_300
+    }
+    const rates = isSummer
+      ? [88.3, 182.9, 275.6]
+      : [88.3, 182.9, 275.6]
+    if (usage <= 300) energyFee = usage * rates[0]
+    else if (usage <= 450) energyFee = 300 * rates[0] + (usage - 300) * rates[1]
+    else energyFee = 300 * rates[0] + 150 * rates[1] + (usage - 450) * rates[2]
+  } else {
+    // 기타 (3단계 누진)
+    if (usage <= 200) basicFee = 910
+    else if (usage <= 400) basicFee = 1_600
+    else basicFee = 7_300
+    if (usage <= 200) energyFee = usage * 88.3
+    else if (usage <= 400) energyFee = 200 * 88.3 + (usage - 200) * 182.9
+    else energyFee = 200 * 88.3 + 200 * 182.9 + (usage - 400) * 275.6
+  }
+
+  const subtotal = basicFee + energyFee
+  const vat = Math.round(subtotal * 0.1)
+  const fund = Math.round(subtotal * 0.037)
+  const total = Math.round(subtotal + vat + fund)
+
+  return { basicFee, energyFee: Math.round(energyFee), vat, fund, total, subtotal: Math.round(subtotal) }
+}
+
 // ─── 9. BMI ────────────────────────────────────────────────────────────────────
 
 export function calculateBMI(height, weight) {
