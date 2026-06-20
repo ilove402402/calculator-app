@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import Layout from '../components/Layout'
 import CalculatorCard from '../components/CalculatorCard'
 import IsansuModal from '../components/IsansuModal'
 import { calculators } from '../data/calculators'
+import { getTopRequests, getGenerated } from '../utils/storage'
 
 const CATEGORY_CARDS = [
   {
@@ -78,12 +79,21 @@ export default function Home() {
   const [searchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [showModal, setShowModal] = useState(false)
+  const [topRequests, setTopRequests] = useState([])
+  const [generatedCalcs, setGeneratedCalcs] = useState([])
+
+  useEffect(() => {
+    setTopRequests(getTopRequests(5))
+    setGeneratedCalcs(getGenerated())
+  }, [])
 
   const filtered = query.trim()
     ? calculators.filter(c =>
         c.name.includes(query) || c.description.includes(query)
       )
     : calculators
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 
   return (
     <Layout>
@@ -94,14 +104,19 @@ export default function Home() {
             <span className="text-base">🤖</span>
             <span className="text-slate-300">
               <span className="font-semibold text-white">이산수</span>가 오늘도 새로운 계산기를 분석 중입니다
+              {topRequests.length > 0 && (
+                <span className="ml-2 text-slate-400">
+                  · 이번 주 요청 {topRequests.reduce((s, r) => s + r.votes, 0)}표
+                </span>
+              )}
             </span>
           </div>
-          <button
-            onClick={() => setShowModal(true)}
+          <Link
+            to="/request"
             className="text-xs text-slate-300 hover:text-white border border-slate-500 hover:border-slate-300 px-3 py-1 rounded-full transition-colors shrink-0"
           >
-            계산기 요청하기
-          </button>
+            계산기 요청하기 →
+          </Link>
         </div>
       </div>
 
@@ -208,52 +223,119 @@ export default function Home() {
         </div>
       </section>
 
+      {/* 이산수가 추가한 NEW 계산기 */}
+      {generatedCalcs.length > 0 && (
+        <section className="max-w-6xl mx-auto px-4 pb-2 pt-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-xl font-bold text-gray-800">🤖 이산수가 추가한 계산기</h2>
+            <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full font-bold">NEW</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {generatedCalcs.map(calc => (
+              <Link
+                key={calc.id}
+                to={calc.path}
+                className="calc-card hover:shadow-md hover:border-blue-200 transition-all group relative"
+              >
+                {new Date(calc.createdAt) > sevenDaysAgo && (
+                  <span className="absolute -top-1.5 -right-1.5 text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full font-bold">
+                    NEW
+                  </span>
+                )}
+                <div className="text-3xl mb-2 text-center">{calc.spec.icon}</div>
+                <div className="text-sm font-semibold text-gray-700 group-hover:text-blue-600 transition-colors text-center leading-tight">
+                  {calc.name}
+                </div>
+                <div className="text-xs text-slate-400 text-center mt-1">🤖 AI 생성</div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 이산수 소개 섹션 */}
       <section className="max-w-6xl mx-auto px-4 py-12">
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl p-8 md:p-10 text-white overflow-hidden relative">
-          {/* 배경 장식 */}
           <div className="absolute top-0 right-0 text-9xl opacity-5 leading-none select-none">🤖</div>
 
-          <div className="relative flex flex-col md:flex-row items-center md:items-start gap-8">
-            {/* 캐릭터 */}
-            <div className="shrink-0 text-center">
-              <div className="w-24 h-24 bg-blue-500 rounded-3xl flex items-center justify-center text-5xl shadow-lg mx-auto mb-3">
-                🤖
+          <div className="relative flex flex-col lg:flex-row items-start gap-8">
+            {/* 캐릭터 + 소개 */}
+            <div className="flex-1">
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center text-3xl shadow-lg shrink-0">
+                  🤖
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-xl font-bold">이산수</h2>
+                    <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium">AI</span>
+                  </div>
+                  <p className="text-slate-400 text-sm">AI 계산기 자동 생성 시스템</p>
+                </div>
               </div>
-              <div className="text-xs text-slate-400 font-medium">AI 계산기 운영 직원</div>
-            </div>
 
-            {/* 소개 */}
-            <div className="flex-1 text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start gap-2 mb-3">
-                <h2 className="text-2xl font-bold">이산수</h2>
-                <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full font-medium">AI</span>
-              </div>
               <p className="text-slate-300 leading-relaxed mb-5">
-                저 <span className="font-semibold text-white">이산수</span>가 매일 트렌드를 분석하고 새로운 계산기를 추가합니다.<br className="hidden md:block" />
-                사용자가 필요한 계산기를 먼저 파악해서 빠르게 개발하는 것이 저의 역할이에요.
+                저 <span className="font-semibold text-white">이산수</span>가 여러분이 원하는 계산기를 분석하고 즉시 만들어드립니다.<br className="hidden md:block" />
+                계산기 이름과 설명만 입력하면 AI가 자동으로 완성합니다.
               </p>
 
-              {/* 통계 */}
-              <div className="flex flex-wrap justify-center md:justify-start gap-6 mb-6">
+              <div className="flex flex-wrap gap-5 mb-6">
                 {[
-                  ['10개', '현재 운영 중'],
-                  ['50+개', '개발 예정'],
-                  ['매일', '트렌드 분석'],
+                  [String(10 + generatedCalcs.length) + '개', '운영 중'],
+                  [String(topRequests.length) + '개', '이번 주 요청'],
+                  ['즉시', '자동 생성'],
                 ].map(([value, label]) => (
-                  <div key={label} className="text-center md:text-left">
+                  <div key={label}>
                     <div className="text-2xl font-bold text-blue-400">{value}</div>
                     <div className="text-xs text-slate-400">{label}</div>
                   </div>
                 ))}
               </div>
 
-              <button
-                onClick={() => setShowModal(true)}
+              <Link
+                to="/request"
                 className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-xl font-semibold transition-colors"
               >
                 🤖 이산수에게 계산기 요청하기
-              </button>
+              </Link>
+            </div>
+
+            {/* 이번 주 TOP 5 요청 */}
+            <div className="w-full lg:w-64 shrink-0">
+              <div className="bg-white bg-opacity-5 rounded-2xl p-4">
+                <h3 className="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
+                  🔥 이번 주 인기 요청 TOP 5
+                </h3>
+                {topRequests.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-slate-400 text-xs mb-2">아직 요청이 없습니다</p>
+                    <Link to="/request" className="text-xs text-blue-400 hover:text-blue-300 underline">
+                      첫 번째 요청 보내기 →
+                    </Link>
+                  </div>
+                ) : (
+                  <ol className="space-y-2">
+                    {topRequests.map((req, i) => (
+                      <li key={req.id} className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                          ${i === 0 ? 'bg-yellow-500 text-white' : i === 1 ? 'bg-slate-400 text-white' : i === 2 ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-300'}`}>
+                          {i + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-200 truncate">{req.name}</p>
+                        </div>
+                        <span className="text-xs text-blue-400 font-medium shrink-0">{req.votes}표</span>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <Link
+                  to="/request"
+                  className="mt-4 block text-center text-xs text-slate-400 hover:text-slate-200 transition-colors"
+                >
+                  전체 요청 보기 →
+                </Link>
+              </div>
             </div>
           </div>
         </div>

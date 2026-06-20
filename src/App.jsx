@@ -11,6 +11,9 @@ import Insurance from './pages/Insurance'
 import YearEndTax from './pages/YearEndTax'
 import BMI from './pages/BMI'
 import DDay from './pages/DDay'
+import RequestPage from './pages/RequestPage'
+import AdminPage from './pages/AdminPage'
+import DynamicCalculator from './pages/DynamicCalculator'
 
 export default function App() {
   return (
@@ -27,6 +30,9 @@ export default function App() {
       <Route path="/bmi" element={<BMI />} />
       <Route path="/dday" element={<DDay />} />
       <Route path="/category/:slug" element={<CategoryPage />} />
+      <Route path="/request" element={<RequestPage />} />
+      <Route path="/isansu-admin" element={<AdminPage />} />
+      <Route path="/dynamic/:id" element={<DynamicCalculator />} />
     </Routes>
   )
 }
